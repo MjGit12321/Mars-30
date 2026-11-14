@@ -13,6 +13,7 @@ export function createInitialBuildings(): Record<BuildingId, BuildingState> {
       dustLevel: def.id === 'solar_panels' ? 55 : 0,
       restoredOnce: def.initialStatus === 'operational',
       timesMaintained: 0,
+      hasVisibleDamage: def.initialStatus !== 'operational',
     };
   }
   return result;
@@ -43,7 +44,8 @@ export function getBuildingEffectiveness(building: BuildingState): number {
 export function applyBuildingConditionChange(
   building: BuildingState,
   delta: number,
-  forceOperational = false
+  forceOperational = false,
+  damageCause?: BuildingState['damageCause']
 ): BuildingState {
   const nextCondition = Math.max(0, Math.min(100, Math.round(building.condition + delta)));
   let nextStatus: BuildingStatus;
@@ -54,11 +56,24 @@ export function applyBuildingConditionChange(
     nextStatus = getStatusFromCondition(nextCondition, building.status === 'inactive');
   }
 
+  const hasVisibleDamage =
+    delta < 0
+      ? nextCondition < 92 || Boolean(building.hasVisibleDamage)
+      : nextStatus !== 'operational';
+
+  const nextCause: BuildingState['damageCause'] = !hasVisibleDamage
+    ? undefined
+    : delta < 0
+    ? damageCause ?? building.damageCause
+    : building.damageCause;
+
   return {
     ...building,
     condition: nextCondition,
     status: nextStatus,
     restoredOnce: building.restoredOnce || nextStatus === 'operational',
+    hasVisibleDamage,
+    damageCause: nextCause,
   };
 }
 

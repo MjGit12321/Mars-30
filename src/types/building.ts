@@ -1,3 +1,4 @@
+import { EventPhenomenon } from './event';
 import { ResourceAmounts, ResourceType } from './resource';
 
 export type BuildingId =
@@ -45,4 +46,6 @@ export interface BuildingState {
   dustLevel: number; // 0 to 100 (especially affects solar panels)
   restoredOnce: boolean;
   timesMaintained: number;
+  hasVisibleDamage?: boolean;
+  damageCause?: EventPhenomenon | 'wear';
 }

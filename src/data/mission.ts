@@ -1,8 +1,23 @@
 import { MissionPhaseInfo, MissionPhaseNumber } from '../types/game';
 
 export const MAX_MISSION_DAYS = 30;
-export const MAX_DAILY_HOURS = 10;
-export const TOTAL_DAY_HOURS = 24;
+export const WORK_START_HOUR = 5; // 5:00 AM
+export const WORK_END_HOUR = 21; // 9:00 PM
+export const MAX_DAILY_HOURS = WORK_END_HOUR - WORK_START_HOUR; // 16 normal working hours
+export const TOTAL_DAY_HOURS = 24; // 11:59 PM hard day limit (9:00 PM – 11:59 PM is overtime)
+
+export function computeWorkClockMetrics(nextHoursElapsed: number): {
+  hoursElapsed: number;
+  hoursRemaining: number;
+  overtimeHours: number;
+} {
+  const clamped = Math.max(WORK_START_HOUR, Math.min(TOTAL_DAY_HOURS, nextHoursElapsed));
+  return {
+    hoursElapsed: clamped,
+    hoursRemaining: Math.max(0, WORK_END_HOUR - clamped),
+    overtimeHours: Math.max(0, clamped - WORK_END_HOUR),
+  };
+}
 
 /**
  * Converts elapsed hours since 12:00 AM (0..24) into a 12-hour clock string (12:00 AM – 11:59 PM).
@@ -21,11 +36,11 @@ export function formatMartianClock(hoursElapsed: number): string {
 }
 
 /**
- * Each hour worked past normal working hours (10:00 AM) causes 5% crew fatigue the next day (capped at 40%).
+ * Each hour worked past normal working hours (9:00 PM) causes 8% crew fatigue the next day (capped at 40%).
  */
 export function calculateOvertimeFatigue(overtimeHours: number): number {
   if (overtimeHours <= 0) return 0;
-  return Math.min(40, Math.round(overtimeHours * 5));
+  return Math.min(40, Math.round(overtimeHours * 8));
 }
 
 export const MISSION_PHASES: Record<MissionPhaseNumber, MissionPhaseInfo> = {
@@ -44,7 +59,7 @@ export const MISSION_PHASES: Record<MissionPhaseNumber, MissionPhaseInfo> = {
     title: 'Establish the Outpost',
     dayRangeLabel: 'Days 2–10',
     objectives: [
-      'Restore the Oxygen Generator and Water Recycling System.',
+      'Restore the Oxygen Generation System and Water Recovery System.',
       'Restore the Greenhouse and plant crops early for future harvests.',
       'Handle your first minor and major Mars environmental events.',
     ],
@@ -55,7 +70,7 @@ export const MISSION_PHASES: Record<MissionPhaseNumber, MissionPhaseInfo> = {
     dayRangeLabel: 'Days 11–20',
     objectives: [
       'Harvest mature crops and replant to build food reserves.',
-      'Restore the Radiation Shelter and backup storage facilities.',
+      'Restore the Radiation Storm Shelter and backup storage facilities.',
       'Keep facility conditions high through dust storms and quakes.',
     ],
   },

@@ -1,4 +1,4 @@
-import { MAX_DAILY_HOURS, TOTAL_DAY_HOURS } from '../data/mission';
+import { computeWorkClockMetrics, TOTAL_DAY_HOURS } from '../data/mission';
 import { BuildingId, BuildingState } from '../types/building';
 import { CrewState } from '../types/game';
 
@@ -26,21 +26,16 @@ export function performCrewShortRest(
   if (hoursElapsed + 2 > TOTAL_DAY_HOURS || crew.energy >= 98) {
     return {
       crew,
-      hoursElapsed,
-      hoursRemaining: Math.max(0, MAX_DAILY_HOURS - hoursElapsed),
-      overtimeHours: Math.max(0, hoursElapsed - MAX_DAILY_HOURS),
+      ...computeWorkClockMetrics(hoursElapsed),
       rested: false,
     };
   }
 
   const habOperational = buildings.main_habitat.status === 'operational';
   const recovery = habOperational ? 28 : 16;
-  const nextHoursElapsed = Math.min(TOTAL_DAY_HOURS, hoursElapsed + 2);
 
   return {
-    hoursElapsed: nextHoursElapsed,
-    hoursRemaining: Math.max(0, MAX_DAILY_HOURS - nextHoursElapsed),
-    overtimeHours: Math.max(0, nextHoursElapsed - MAX_DAILY_HOURS),
+    ...computeWorkClockMetrics(hoursElapsed + 2),
     rested: true,
     crew: {
       ...crew,

@@ -60,15 +60,20 @@ export function getAvailableTaskItems(state: GameState): AvailableTaskItem[] {
   ) {
     items.push({
       id: 'special_shelter',
-      taskName: 'Hide Crew in Shelter!',
+      taskName: 'Hide Crew in Radiation Storm Shelter!',
       buildingId: 'radiation_shelter',
-      buildingName: 'Radiation Shelter',
+      buildingName: 'Radiation Storm Shelter',
       kind: 'special',
     });
   }
 
   // Ripe Greenhouse Harvest
-  if (state.greenhouseCrop?.isMature && state.hoursElapsed + 1 <= TOTAL_DAY_HOURS) {
+  if (
+    !state.crew.inShelter &&
+    state.greenhouseCrop?.isMature &&
+    state.hoursElapsed + 1 <= TOTAL_DAY_HOURS &&
+    state.pendingAction?.kind !== 'harvest'
+  ) {
     items.push({
       id: 'special_harvest',
       taskName: 'Harvest Food!',
@@ -79,8 +84,17 @@ export function getAvailableTaskItems(state: GameState): AvailableTaskItem[] {
     });
   }
 
-  // Ongoing animated task
-  if (state.ongoingTask) {
+  // Pending / Ongoing crew task (walking to building or actively working)
+  if (state.pendingAction) {
+    const act = state.pendingAction;
+    items.push({
+      id: `pending_${act.id}`,
+      taskName: act.phase === 'walking' ? `Walking: ${act.label}` : `Working: ${act.label}`,
+      buildingId: act.buildingId,
+      buildingName: BUILDING_DEFINITIONS[act.buildingId].shortName,
+      kind: 'ongoing',
+    });
+  } else if (state.ongoingTask) {
     const t = TASK_DEFINITIONS.find((x) => x.id === state.ongoingTask?.taskId);
     if (t) {
       items.push({
@@ -94,11 +108,13 @@ export function getAvailableTaskItems(state: GameState): AvailableTaskItem[] {
     }
   }
 
+  const activeTaskId = state.pendingAction?.taskId ?? state.ongoingTask?.taskId;
+
   // Available Major Tasks (strictly executable right now)
   for (const id of MAJOR_TASK_PRIORITY) {
     const task = TASK_DEFINITIONS.find((t) => t.id === id);
     if (!task) continue;
-    if (state.ongoingTask?.taskId === task.id) continue;
+    if (activeTaskId === task.id) continue;
     if (validateTask(task, state).canExecute) {
       const bState = state.buildings[task.buildingId];
       const def = BUILDING_DEFINITIONS[task.buildingId];
@@ -116,7 +132,7 @@ export function getAvailableTaskItems(state: GameState): AvailableTaskItem[] {
   // Available Minor Tasks (strictly executable right now)
   for (const task of TASK_DEFINITIONS) {
     if (task.category !== 'minor') continue;
-    if (state.ongoingTask?.taskId === task.id) continue;
+    if (activeTaskId === task.id) continue;
     if (validateTask(task, state).canExecute) {
       const def = BUILDING_DEFINITIONS[task.buildingId];
       items.push({
@@ -252,19 +268,35 @@ export function MajorTasksSidebar({
         <div className="p-2.5 overflow-y-auto space-y-2 flex-1 min-h-0">
           {availableItems.length === 0 ? (
             <div className="mars-panel-light p-4 text-center space-y-2">
-              <CheckCircle2 className="w-9 h-9 text-[#396344] mx-auto" aria-hidden="true" />
-              <div className="text-xs font-extrabold text-[#292C2B]">
-                {state.crew.energy < 20
-                  ? 'Crew Needs Rest!'
-                  : state.hoursElapsed >= 22
-                  ? 'Late Night! Tap End Day.'
-                  : 'All Ready for Today!'}
-              </div>
-              <p className="text-[11px] font-semibold text-[#292C2B]/75">
-                {state.crew.energy < 20
-                  ? 'Tap Rest above or End Day below.'
-                  : 'Tap any building or press End Day below.'}
-              </p>
+              {state.crew.inShelter ? (
+                <>
+                  <Shield className="w-9 h-9 text-[#477C9B] mx-auto" aria-hidden="true" />
+                  <div className="text-xs font-extrabold text-[#292C2B]">
+                    Crew Safe in Shelter!
+                  </div>
+                  <p className="text-[11px] font-semibold text-[#292C2B]/80">
+                    {state.activeEvent?.definition.radiationLevel
+                      ? 'Work tasks are paused until the radiation passes. Tap End Day below.'
+                      : 'Work tasks are paused while inside the Radiation Storm Shelter.'}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-9 h-9 text-[#396344] mx-auto" aria-hidden="true" />
+                  <div className="text-xs font-extrabold text-[#292C2B]">
+                    {state.crew.energy < 20
+                      ? 'Crew Needs Rest!'
+                      : state.hoursElapsed >= 22
+                      ? 'Late Night! Tap End Day.'
+                      : 'All Ready for Today!'}
+                  </div>
+                  <p className="text-[11px] font-semibold text-[#292C2B]/75">
+                    {state.crew.energy < 20
+                      ? 'Tap Rest above or End Day below.'
+                      : 'Tap any building or press End Day below.'}
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             availableItems.map((item) => {

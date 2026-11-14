@@ -3,7 +3,7 @@ import { CROP_MAP } from '../data/crops';
 import { RESOURCE_CONFIGS, RESOURCE_ORDER } from '../data/resources';
 import { BuildingId, BuildingState } from '../types/building';
 import { ActiveEvent } from '../types/event';
-import { PlantedCrop } from '../types/game';
+import { MissionModifiers, PlantedCrop } from '../types/game';
 import { ResourceAmounts, ResourceNetRate, ResourceType } from '../types/resource';
 import { getBuildingEffectiveness } from './buildings';
 
@@ -64,8 +64,9 @@ export function calculateDailyRates(params: {
   currentResources: ResourceAmounts;
   greenhouseCrop: PlantedCrop | null;
   activeEvent: ActiveEvent | null;
+  modifiers?: MissionModifiers;
 }): DailySimulationRates {
-  const { buildings, currentResources, greenhouseCrop, activeEvent } = params;
+  const { buildings, currentResources, greenhouseCrop, activeEvent, modifiers } = params;
 
   const production: ResourceAmounts = { oxygen: 0, water: 0, food: 0, energy: 0 };
   const consumption: ResourceAmounts = {
@@ -79,6 +80,9 @@ export function calculateDailyRates(params: {
   const solarState = buildings.solar_panels;
   const solarDef = BUILDING_LIST.find((b) => b.id === 'solar_panels')!;
   let solarOutput = (solarDef.dailyProduction.energy ?? 0) * getBuildingEffectiveness(solarState);
+  if (modifiers?.solarOutputBonusPct) {
+    solarOutput *= Math.max(0.5, 1 + modifiers.solarOutputBonusPct / 100);
+  }
   if (activeEvent?.definition.solarPenaltyFactor) {
     solarOutput *= Math.max(0.15, 1 - activeEvent.definition.solarPenaltyFactor);
   }

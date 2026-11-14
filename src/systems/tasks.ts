@@ -1,5 +1,5 @@
 import { BUILDING_DEFINITIONS } from '../data/buildings';
-import { MAX_DAILY_HOURS, TOTAL_DAY_HOURS } from '../data/mission';
+import { computeWorkClockMetrics, TOTAL_DAY_HOURS } from '../data/mission';
 import { TASK_DEFINITIONS } from '../data/tasks';
 import { BuildingId } from '../types/building';
 import { GameState } from '../types/game';
@@ -29,7 +29,32 @@ export function getEffectiveTaskCosts(
   };
 }
 
-export function validateTask(task: TaskDefinition, state: GameState): TaskValidationResult {
+export function validateTask(
+  task: TaskDefinition,
+  state: GameState,
+  preAppliedTimeHours = state.pendingAction?.timeHoursApplied ?? 0
+): TaskValidationResult {
+  if (state.sleepPhase !== 'idle' || state.sleepingRemaining > 0) {
+    return {
+      canExecute: false,
+      reason: 'Crew is returning inside Habitat to rest',
+    };
+  }
+
+  if (state.pendingAction?.phase === 'working') {
+    return {
+      canExecute: false,
+      reason: 'Crew is busy finishing a task',
+    };
+  }
+
+  if (state.crew.inShelter) {
+    return {
+      canExecute: false,
+      reason: 'Crew must stay inside Radiation Storm Shelter until danger passes',
+    };
+  }
+
   const building = state.buildings[task.buildingId];
   const costs = getEffectiveTaskCosts(task, state);
 
@@ -77,7 +102,10 @@ export function validateTask(task: TaskDefinition, state: GameState): TaskValida
     };
   }
 
-  if (state.hoursElapsed + costs.timeHours > TOTAL_DAY_HOURS) {
+  if (
+    state.hoursElapsed + Math.max(0, costs.timeHours - preAppliedTimeHours) >
+    TOTAL_DAY_HOURS
+  ) {
     return {
       canExecute: false,
       reason: `Past 11:59 PM (needs ${costs.timeHours}h) — End Day`,
@@ -101,8 +129,12 @@ export function validateTask(task: TaskDefinition, state: GameState): TaskValida
   return { canExecute: true };
 }
 
-export function applyTaskExecution(task: TaskDefinition, state: GameState): GameState {
-  const validation = validateTask(task, state);
+export function applyTaskExecution(
+  task: TaskDefinition,
+  state: GameState,
+  preAppliedTimeHours = 0
+): GameState {
+  const validation = validateTask(task, state, preAppliedTimeHours);
   if (!validation.canExecute) {
     return state;
   }
@@ -135,16 +167,14 @@ export function applyTaskExecution(task: TaskDefinition, state: GameState): Game
       ? `Day ${state.day}: Restored ${buildingDef.name}`
       : null;
 
-  const nextHoursElapsed = Math.min(TOTAL_DAY_HOURS, state.hoursElapsed + costs.timeHours);
-  const nextHoursRemaining = Math.max(0, MAX_DAILY_HOURS - nextHoursElapsed);
-  const nextOvertimeHours = Math.max(0, nextHoursElapsed - MAX_DAILY_HOURS);
+  const remainingHoursToAdd = Math.max(0, costs.timeHours - preAppliedTimeHours);
+  const clock = computeWorkClockMetrics(state.hoursElapsed + remainingHoursToAdd);
 
   return {
     ...state,
-    hoursElapsed: nextHoursElapsed,
-    hoursRemaining: nextHoursRemaining,
-    overtimeHours: nextOvertimeHours,
-    ongoingTask: { taskId: task.id, buildingId: task.buildingId },
+    ...clock,
+    ongoingTask: null,
+    pendingAction: null,
     resources: nextResources,
     crew: {
       ...state.crew,

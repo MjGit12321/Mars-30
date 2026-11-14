@@ -1,4 +1,5 @@
 import React from 'react';
+import { GilEmotion } from '../../types/game';
 import { ResourceType } from '../../types/resource';
 
 export function ResourceIcon({
@@ -61,20 +62,40 @@ export function ResourceIcon({
 export function GilAvatarIcon({
   className = 'w-10 h-10',
   mood = 'info',
+  emotion,
   isSpeaking = false,
 }: {
   className?: string;
   mood?: 'info' | 'warning' | 'alert';
+  emotion?: GilEmotion;
   isSpeaking?: boolean;
 }) {
+  const activeEmotion: GilEmotion =
+    emotion ?? (mood === 'alert' ? 'worried' : mood === 'warning' ? 'concerned' : 'happy');
+
   const antennaColor =
-    mood === 'alert' ? '#C94B43' : mood === 'warning' ? '#D77B4A' : '#F4C552';
-  const eyeColor = mood === 'alert' ? '#FAF0DC' : '#FFF4D6';
+    activeEmotion === 'worried' || mood === 'alert'
+      ? '#C94B43'
+      : activeEmotion === 'surprised' || activeEmotion === 'concerned' || mood === 'warning'
+      ? '#D77B4A'
+      : activeEmotion === 'excited'
+      ? '#89AA91'
+      : '#F4C552';
+  const eyeColor = activeEmotion === 'worried' ? '#FAF0DC' : '#FFF4D6';
+
+  const motionClass =
+    activeEmotion === 'excited'
+      ? 'animate-gil-excited'
+      : activeEmotion === 'surprised'
+      ? 'animate-gil-surprise'
+      : activeEmotion === 'worried'
+      ? 'animate-gil-worry'
+      : 'animate-gil-float';
 
   return (
     <svg
       viewBox="0 0 44 44"
-      className={`${className} animate-gil-float`}
+      className={`${className} ${motionClass}`}
       aria-hidden="true"
     >
       {/* Side ear-pods */}
@@ -102,15 +123,61 @@ export function GilAvatarIcon({
       <rect x="9.5" y="13.5" width="25" height="18" rx="5.5" fill="#292C2B" />
 
       {/* Cheeks */}
-      <circle cx="13" cy="25" r="1.8" fill="#D77B4A" opacity="0.7" />
-      <circle cx="31" cy="25" r="1.8" fill="#D77B4A" opacity="0.7" />
+      <circle
+        cx="13"
+        cy="25"
+        r="1.9"
+        fill={activeEmotion === 'excited' || activeEmotion === 'relieved' ? '#E9B77B' : '#D77B4A'}
+        opacity={activeEmotion === 'excited' ? 0.9 : 0.7}
+      />
+      <circle
+        cx="31"
+        cy="25"
+        r="1.9"
+        fill={activeEmotion === 'excited' || activeEmotion === 'relieved' ? '#E9B77B' : '#D77B4A'}
+        opacity={activeEmotion === 'excited' ? 0.9 : 0.7}
+      />
 
-      {/* Expressive blinking eyes */}
+      {/* Expressive eyes & brows by emotion */}
       <g className="animate-gil-blink">
-        {mood === 'warning' ? (
+        {activeEmotion === 'relieved' ? (
           <>
-            <path d="M14 21.5 Q16.5 18.5 19 21.5" fill="none" stroke={eyeColor} strokeWidth="2.4" strokeLinecap="round" />
-            <path d="M25 21.5 Q27.5 18.5 30 21.5" fill="none" stroke={eyeColor} strokeWidth="2.4" strokeLinecap="round" />
+            <path d="M13.5 21.8 Q16.5 18 19.5 21.8" fill="none" stroke={eyeColor} strokeWidth="2.4" strokeLinecap="round" />
+            <path d="M24.5 21.8 Q27.5 18 30.5 21.8" fill="none" stroke={eyeColor} strokeWidth="2.4" strokeLinecap="round" />
+          </>
+        ) : activeEmotion === 'excited' ? (
+          <>
+            <circle cx="16.5" cy="20.6" r="3.1" fill="#F4C552" />
+            <circle cx="27.5" cy="20.6" r="3.1" fill="#F4C552" />
+            <circle cx="17.3" cy="19.6" r="1.1" fill="#FAF0DC" />
+            <circle cx="28.3" cy="19.6" r="1.1" fill="#FAF0DC" />
+          </>
+        ) : activeEmotion === 'surprised' ? (
+          <>
+            <path d="M13.5 16.5 Q16.5 14.5 19.2 16.5" fill="none" stroke="#F4C552" strokeWidth="1.6" strokeLinecap="round" />
+            <path d="M24.8 16.5 Q27.5 14.5 30.5 16.5" fill="none" stroke="#F4C552" strokeWidth="1.6" strokeLinecap="round" />
+            <circle cx="16.5" cy="21" r="3.2" fill={eyeColor} />
+            <circle cx="27.5" cy="21" r="3.2" fill={eyeColor} />
+            <circle cx="16.5" cy="21" r="1.1" fill="#292C2B" />
+            <circle cx="27.5" cy="21" r="1.1" fill="#292C2B" />
+          </>
+        ) : activeEmotion === 'worried' ? (
+          <>
+            <line x1="13.5" y1="18.2" x2="19" y2="16.6" stroke="#FAF0DC" strokeWidth="1.7" strokeLinecap="round" />
+            <line x1="30.5" y1="18.2" x2="25" y2="16.6" stroke="#FAF0DC" strokeWidth="1.7" strokeLinecap="round" />
+            <circle cx="16.5" cy="21.4" r="2.6" fill={eyeColor} />
+            <circle cx="27.5" cy="21.4" r="2.6" fill={eyeColor} />
+            <circle cx="16.9" cy="21.6" r="1" fill="#C94B43" />
+            <circle cx="27.9" cy="21.6" r="1" fill="#C94B43" />
+          </>
+        ) : activeEmotion === 'concerned' ? (
+          <>
+            <line x1="13.5" y1="17.8" x2="19.2" y2="17" stroke="#E9B77B" strokeWidth="1.6" strokeLinecap="round" />
+            <line x1="30.5" y1="17.8" x2="24.8" y2="17" stroke="#E9B77B" strokeWidth="1.6" strokeLinecap="round" />
+            <ellipse cx="16.5" cy="21.3" rx="2.6" ry="2.1" fill={eyeColor} />
+            <ellipse cx="27.5" cy="21.3" rx="2.6" ry="2.1" fill={eyeColor} />
+            <circle cx="17.2" cy="21.1" r="0.9" fill="#477C9B" />
+            <circle cx="28.2" cy="21.1" r="0.9" fill="#477C9B" />
           </>
         ) : (
           <>
@@ -124,11 +191,27 @@ export function GilAvatarIcon({
 
       {/* Expressive mouth (animates when speaking) */}
       <g className={isSpeaking ? 'animate-gil-talk' : ''}>
-        {mood === 'alert' ? (
-          <ellipse cx="22" cy="26.5" rx="3.2" ry="2.2" fill="#C94B43" stroke="#FAF0DC" strokeWidth="1.2" />
-        ) : isSpeaking ? (
+        {activeEmotion === 'surprised' ? (
+          <circle cx="22" cy="27" r="2.4" fill="#D77B4A" stroke="#FAF0DC" strokeWidth="1.2" />
+        ) : activeEmotion === 'worried' ? (
           <path
-            d="M17.5 25.5 Q22 30 26.5 25.5 Z"
+            d="M17.5 27.2 Q19.7 25 22 26.8 Q24.3 28.5 26.5 26.2"
+            fill="none"
+            stroke="#FAF0DC"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        ) : activeEmotion === 'concerned' ? (
+          <path
+            d="M18 26.5 Q22 25.2 26 26.5"
+            fill="none"
+            stroke="#E9B77B"
+            strokeWidth="2.1"
+            strokeLinecap="round"
+          />
+        ) : activeEmotion === 'excited' || isSpeaking ? (
+          <path
+            d="M17 25 Q22 30.5 27 25 Z"
             fill="#89AA91"
             stroke="#FAF0DC"
             strokeWidth="1.1"

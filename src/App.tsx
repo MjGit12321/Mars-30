@@ -3,7 +3,12 @@ import { CheckCircle2 } from 'lucide-react';
 import { BuildingPanel } from './components/buildings/BuildingPanel';
 import { GILPanel } from './components/gil/GILPanel';
 import { EndDayDock, GameHUD } from './components/hud/GameHUD';
-import { DaySummaryModal, EventModal, PauseModal } from './components/mission/MissionModals';
+import {
+  DaySummaryModal,
+  EventModal,
+  GilDayHintModal,
+  PauseModal,
+} from './components/mission/MissionModals';
 import { MissionReport } from './components/mission/MissionReport';
 import {
   getAvailableTaskItems,
@@ -41,8 +46,12 @@ export default function App() {
         msg = `Got +${evt.amount} Food!`;
       } else if (evt.type === 'shelter') {
         msg = evt.inShelter
-          ? 'Crew safe inside Shelter!'
-          : 'Crew back outside!';
+          ? 'All 4 crew & GIL inside Shelter!'
+          : 'Crew back outside — tasks ready!';
+      } else if (evt.type === 'decision') {
+        msg = `Plan chosen: ${evt.choiceTitle}`;
+      } else if (evt.type === 'event_impact') {
+        msg = 'Outpost systems took weather damage!';
       }
       if (msg) {
         setActionToast(msg);
@@ -59,12 +68,29 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const current = gameStore.getState();
+      if (
+        current.screen === 'PLAYING' &&
+        !current.lastDaySummary &&
+        current.gilDayHint &&
+        (!current.activeEvent || current.activeEvent.resolved) &&
+        (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ')
+      ) {
+        e.preventDefault();
+        gameStore.dismissGilDayHint();
+        return;
+      }
+
       if (e.key === 'Escape') {
-        const current = gameStore.getState();
         if (current.screen === 'PLAYING') {
           if (current.lastDaySummary) {
             gameStore.dismissDaySummary();
-          } else if (current.activeEvent && !current.activeEvent.resolved) {
+          } else if (
+            current.activeEvent &&
+            !current.activeEvent.resolved &&
+            current.activeEvent.animationRemaining <= 0 &&
+            !current.activeEvent.definition.choices?.length
+          ) {
             gameStore.acknowledgeActiveEvent();
           } else if (leftDrawerOpen) {
             setLeftDrawerOpen(false);
@@ -174,13 +200,17 @@ export default function App() {
         </div>
       )}
 
-      {/* Active Environmental Event Alert */}
-      {state.screen === 'PLAYING' && state.activeEvent && !state.activeEvent.resolved && (
-        <EventModal
-          event={state.activeEvent}
-          onAcknowledge={() => gameStore.acknowledgeActiveEvent()}
-        />
-      )}
+      {/* Active Environmental Event Alert (opens after live animation completes) */}
+      {state.screen === 'PLAYING' &&
+        state.activeEvent &&
+        !state.activeEvent.resolved &&
+        state.activeEvent.animationRemaining <= 0 && (
+          <EventModal
+            event={state.activeEvent}
+            onAcknowledge={() => gameStore.acknowledgeActiveEvent()}
+            onSelectDecision={(choiceId) => gameStore.chooseEventDecision(choiceId)}
+          />
+        )}
 
       {/* Daily Summary Modal */}
       {state.screen === 'PLAYING' &&
@@ -189,6 +219,17 @@ export default function App() {
           <DaySummaryModal
             summary={state.lastDaySummary}
             onContinue={() => gameStore.dismissDaySummary()}
+          />
+        )}
+
+      {/* GIL Morning Hint Modal (centered with blurred/dimmed background after dismissing Day Summary) */}
+      {state.screen === 'PLAYING' &&
+        !state.lastDaySummary &&
+        state.gilDayHint &&
+        (!state.activeEvent || state.activeEvent.resolved) && (
+          <GilDayHintModal
+            message={state.gilDayHint}
+            onDismiss={() => gameStore.dismissGilDayHint()}
           />
         )}
 

@@ -4,6 +4,7 @@ import {
   BookOpen,
   CheckCircle2,
   Clock,
+  Footprints,
   Shield,
   Sparkles,
   Sprout,
@@ -13,7 +14,7 @@ import {
 } from 'lucide-react';
 import { BUILDING_DEFINITIONS } from '../../data/buildings';
 import { CROP_DEFINITIONS, CROP_MAP } from '../../data/crops';
-import { TOTAL_DAY_HOURS } from '../../data/mission';
+import { TOTAL_DAY_HOURS, WORK_END_HOUR } from '../../data/mission';
 import { canPlantCrop } from '../../systems/greenhouse';
 import { getEffectiveTaskCosts, getTasksForBuilding, validateTask } from '../../systems/tasks';
 import { BuildingId } from '../../types/building';
@@ -64,6 +65,11 @@ export function BuildingPanel({
     ? '#D77B4A'
     : '#396344';
 
+  const isSleeping = state.sleepPhase !== 'idle' || state.sleepingRemaining > 0;
+  const isWorkingAnywhere = state.pendingAction?.phase === 'working';
+  const pendingHere =
+    state.pendingAction?.buildingId === id ? state.pendingAction : null;
+
   // Show ONLY actions the player can currently perform
   const availableTasks = allTasks.filter((t) => validateTask(t, state).canExecute);
 
@@ -71,18 +77,31 @@ export function BuildingPanel({
   const primaryPendingTask = allTasks.find((t) => {
     if (needsRestorationFirst && t.category === 'minor' && !t.setsOperational) return false;
     const v = validateTask(t, state);
-    return !v.canExecute && v.reason !== 'Already restored' && v.reason !== 'Condition is already at peak' && v.reason !== 'Panels are already clean';
+    return (
+      !v.canExecute &&
+      v.reason !== 'Already restored' &&
+      v.reason !== 'Condition is already at peak' &&
+      v.reason !== 'Panels are already clean'
+    );
   });
   const pendingReason = primaryPendingTask ? validateTask(primaryPendingTask, state).reason : null;
 
   const activeCrop = state.greenhouseCrop ? CROP_MAP[state.greenhouseCrop.cropId] : null;
   const canHarvestNow =
     id === 'greenhouse' &&
+    !isSleeping &&
+    !isWorkingAnywhere &&
+    !state.crew.inShelter &&
     Boolean(state.greenhouseCrop?.isMature) &&
     state.hoursElapsed + 1 <= TOTAL_DAY_HOURS;
 
   const availableCrops =
-    id === 'greenhouse' && !needsRestorationFirst && !state.greenhouseCrop
+    id === 'greenhouse' &&
+    !isSleeping &&
+    !isWorkingAnywhere &&
+    !needsRestorationFirst &&
+    !state.greenhouseCrop &&
+    !state.crew.inShelter
       ? CROP_DEFINITIONS.filter(
           (crop) =>
             canPlantCrop({
@@ -91,12 +110,18 @@ export function BuildingPanel({
               currentCrop: state.greenhouseCrop,
               resources: state.resources,
               hoursElapsed: state.hoursElapsed,
+              inShelter: state.crew.inShelter,
             }).ok
         )
       : [];
 
   const canUseShelter =
-    id === 'radiation_shelter' && !needsRestorationFirst;
+    id === 'radiation_shelter' &&
+    !needsRestorationFirst &&
+    !isSleeping &&
+    !isWorkingAnywhere;
+  const radiationDangerActive = Boolean(state.activeEvent?.definition.radiationLevel);
+  const shelterLockedByRadiation = state.crew.inShelter && radiationDangerActive;
 
   const hasAnyAction =
     availableTasks.length > 0 ||
@@ -178,6 +203,46 @@ export function BuildingPanel({
             )}
           </div>
 
+          {/* Live NAS Walking / Working Status Card */}
+          {pendingHere && (
+            <div className="p-2.5 rounded-xl bg-[#718B78]/15 border-2 border-[#718B78] text-xs space-y-1.5">
+              <div className="font-extrabold text-[#292C2B] flex items-center gap-1.5">
+                {pendingHere.phase === 'walking' ? (
+                  <Footprints className="w-4 h-4 text-[#477C9B] shrink-0" aria-hidden="true" />
+                ) : (
+                  <Wrench className="w-4 h-4 text-[#396344] shrink-0" aria-hidden="true" />
+                )}
+                <span>
+                  {pendingHere.phase === 'walking'
+                    ? 'NAS is on the way...'
+                    : `Working: ${pendingHere.label}`}
+                </span>
+              </div>
+              {pendingHere.phase === 'walking' ? (
+                <p className="text-[11px] font-bold text-[#292C2B]/80 leading-snug">
+                  Task starts automatically as soon as NAS reaches the doorstep!
+                </p>
+              ) : (
+                <div className="h-2 w-full bg-[#F1D8A8] border border-[#292C2B] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#718B78] transition-all duration-100"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.max(
+                          8,
+                          ((pendingHere.workDurationSec - pendingHere.workRemainingSec) /
+                            Math.max(0.1, pendingHere.workDurationSec)) *
+                            100
+                        )
+                      )}%`,
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Growing Crop Progress Bar (informational while growing) */}
           {id === 'greenhouse' && state.greenhouseCrop && activeCrop && !state.greenhouseCrop.isMature && (
             <div className="mars-panel-light p-2.5 space-y-1.5">
@@ -206,6 +271,21 @@ export function BuildingPanel({
             </div>
           )}
 
+          {/* SHELTER PAUSE NOTICE */}
+          {state.crew.inShelter && (
+            <div className="p-2.5 rounded-xl bg-[#477C9B]/15 border-2 border-[#477C9B] text-xs space-y-0.5">
+              <div className="font-extrabold text-[#292C2B] flex items-center gap-1.5">
+                <Shield className="w-4 h-4 text-[#477C9B] shrink-0" aria-hidden="true" />
+                <span>Crew Sheltering Inside</span>
+              </div>
+              <p className="text-[11px] font-bold text-[#292C2B]/80 leading-snug">
+                {radiationDangerActive
+                  ? 'All work tasks are disabled. Crew must remain inside until the radiation danger passes (End Day).'
+                  : 'All work tasks are paused while the crew is inside the shelter.'}
+              </p>
+            </div>
+          )}
+
           {/* ONLY AVAILABLE ACTIONS */}
           <div className="space-y-2">
             {/* Radiation Shelter Toggle (only once restored) */}
@@ -213,10 +293,13 @@ export function BuildingPanel({
               <button
                 type="button"
                 onClick={onToggleShelter}
-                className={`mars-btn w-full p-2.5 rounded-xl flex items-center gap-3 text-left cursor-pointer ${
-                  state.crew.inShelter
-                    ? 'bg-[#E9B77B] text-[#292C2B]'
-                    : 'bg-[#477C9B] text-[#FAF0DC]'
+                disabled={shelterLockedByRadiation}
+                className={`mars-btn w-full p-2.5 rounded-xl flex items-center gap-3 text-left ${
+                  shelterLockedByRadiation
+                    ? 'bg-[#718B78] text-[#FAF0DC] cursor-not-allowed opacity-95'
+                    : state.crew.inShelter
+                    ? 'bg-[#E9B77B] text-[#292C2B] cursor-pointer'
+                    : 'bg-[#477C9B] text-[#FAF0DC] cursor-pointer'
                 }`}
               >
                 <div className="w-9 h-9 rounded-xl bg-[#FAF0DC] border-2 border-[#292C2B] flex items-center justify-center shrink-0">
@@ -224,12 +307,18 @@ export function BuildingPanel({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-extrabold leading-tight">
-                    {state.crew.inShelter ? 'Go Back Outside' : 'Hide Crew Inside!'}
+                    {shelterLockedByRadiation
+                      ? 'Safe Inside Until Danger Passes'
+                      : state.crew.inShelter
+                      ? 'Go Back Outside'
+                      : 'Move All 4 Crew Inside!'}
                   </div>
-                  <div className="text-[11px] font-semibold opacity-90">
-                    {state.crew.inShelter
+                  <div className="text-[11px] font-semibold opacity-95">
+                    {shelterLockedByRadiation
+                      ? 'Tap END DAY below to let the storm pass'
+                      : state.crew.inShelter
                       ? 'Crew is safe inside right now'
-                      : 'Protects crew from solar storms'}
+                      : 'Protects NAS, EVA, KAI, MIA & GIL'}
                   </div>
                 </div>
               </button>
@@ -240,6 +329,7 @@ export function BuildingPanel({
               <button
                 type="button"
                 onClick={onHarvestCrop}
+                disabled={pendingHere?.kind === 'harvest'}
                 className="mars-btn w-full p-2.5 rounded-xl bg-[#718B78] text-[#FAF0DC] flex items-center gap-3 text-left cursor-pointer"
               >
                 <div className="w-9 h-9 rounded-xl bg-[#FAF0DC] border-2 border-[#292C2B] flex items-center justify-center shrink-0">
@@ -247,7 +337,9 @@ export function BuildingPanel({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-extrabold leading-tight">
-                    Harvest +{activeCrop.harvestFoodYield} Food!
+                    {pendingHere?.kind === 'harvest'
+                      ? 'NAS Walking to Harvest...'
+                      : `Harvest +${activeCrop.harvestFoodYield} Food!`}
                   </div>
                   <div className="text-[11px] font-bold opacity-95 flex items-center gap-1 mt-0.5">
                     <Clock className="w-3 h-3" aria-hidden="true" />
@@ -258,41 +350,49 @@ export function BuildingPanel({
             )}
 
             {/* Available Crop Planting Buttons */}
-            {availableCrops.map((crop) => (
-              <button
-                key={crop.id}
-                type="button"
-                onClick={() => onPlantCrop(crop.id)}
-                className="mars-btn w-full p-2.5 rounded-xl bg-[#718B78] text-[#FAF0DC] flex items-center gap-3 text-left cursor-pointer"
-              >
-                <div className="w-9 h-9 rounded-xl bg-[#FAF0DC] border-2 border-[#292C2B] flex items-center justify-center shrink-0">
-                  <Sprout className="w-5 h-5 text-[#396344]" aria-hidden="true" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-extrabold leading-tight">
-                    Plant {crop.name}
+            {availableCrops.map((crop) => {
+              const isQueuedCrop =
+                pendingHere?.kind === 'plant' && pendingHere?.cropId === crop.id;
+              return (
+                <button
+                  key={crop.id}
+                  type="button"
+                  onClick={() => onPlantCrop(crop.id)}
+                  disabled={isQueuedCrop}
+                  className="mars-btn w-full p-2.5 rounded-xl bg-[#718B78] text-[#FAF0DC] flex items-center gap-3 text-left cursor-pointer"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-[#FAF0DC] border-2 border-[#292C2B] flex items-center justify-center shrink-0">
+                    <Sprout className="w-5 h-5 text-[#396344]" aria-hidden="true" />
                   </div>
-                  <div className="text-[11px] font-bold opacity-95 flex flex-wrap items-center gap-2 mt-0.5 tabular-nums">
-                    <span>+{crop.harvestFoodYield} Food</span>
-                    <span>· {crop.growthDays} days</span>
-                    <span>· {crop.seedWaterCost}W {crop.seedEnergyCost}E</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-extrabold leading-tight">
+                      {isQueuedCrop ? `NAS Walking to Plant ${crop.name}...` : `Plant ${crop.name}`}
+                    </div>
+                    <div className="text-[11px] font-bold opacity-95 flex flex-wrap items-center gap-2 mt-0.5 tabular-nums">
+                      <span>+{crop.harvestFoodYield} Food</span>
+                      <span>· {crop.growthDays} days</span>
+                      <span>· {crop.seedWaterCost}W {crop.seedEnergyCost}E</span>
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
 
             {/* Available Repair / Clean / Restore Buttons */}
             {availableTasks.map((task) => {
               const costs = getEffectiveTaskCosts(task, state);
               const projectedHoursElapsed = state.hoursElapsed + costs.timeHours;
-              const entersOvertime = projectedHoursElapsed > state.maxDailyHours;
+              const entersOvertime = projectedHoursElapsed > WORK_END_HOUR;
               const isMajor = task.category === 'major';
+              const isWalkingThis =
+                pendingHere?.kind === 'task' && pendingHere?.taskId === task.id;
 
               return (
                 <button
                   key={task.id}
                   type="button"
                   onClick={() => onExecuteTask(task.id)}
+                  disabled={isWalkingThis || isWorkingAnywhere}
                   className={`mars-btn w-full p-2.5 rounded-xl flex items-center gap-3 text-left cursor-pointer ${
                     isMajor
                       ? 'bg-[#B94F32] text-[#FAF0DC]'
@@ -309,7 +409,7 @@ export function BuildingPanel({
 
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-extrabold leading-tight">
-                      {task.title}
+                      {isWalkingThis ? `NAS Walking: ${task.title}` : task.title}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-bold opacity-95 tabular-nums">
                       <span className="inline-flex items-center gap-0.5">

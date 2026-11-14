@@ -13,6 +13,35 @@ export type EventPhenomenon =
   | 'solar_energetic_particles'
   | 'global_dust_storm';
 
+export type DecisionIconType = 'shield' | 'zap' | 'wrench' | 'sun' | 'leaf' | 'users';
+
+export interface EventDecisionOption {
+  id: string;
+  title: string;
+  icon: DecisionIconType;
+  shortDesc: string;
+  benefitTag: string;
+  riskTag: string;
+  gilHeadline: string;
+  gilOutcome: string;
+  gilFutureWarning: string;
+  urgency: 'info' | 'warning' | 'alert';
+  immediateEffect: {
+    resourcesDelta?: Partial<ResourceAmounts>;
+    crewEnergyDelta?: number;
+    crewConditionDelta?: number;
+    crewRadiationDelta?: number;
+    setInShelter?: boolean;
+    timeHoursCost?: number;
+    buildingDeltas?: Partial<Record<BuildingId, number>>;
+    solarDustDelta?: number;
+    solarOutputBonusPctDelta?: number;
+    stormDamageFactorMultiplier?: number;
+    extraDustNextStormDelta?: number;
+    cropBoostDays?: number;
+  };
+}
+
 export interface EventDefinition {
   id: string;
   phenomenon: EventPhenomenon;
@@ -29,6 +58,7 @@ export interface EventDefinition {
   conditionDamage?: number;
   dustAdded?: number;
   cropGrowthPenalty?: number;
+  choices?: EventDecisionOption[];
 }
 
 export interface ActiveEvent {
@@ -36,7 +66,11 @@ export interface ActiveEvent {
   dayTriggered: number;
   resolved: boolean;
   shelterUsed: boolean;
+  selectedChoiceId?: string;
   mitigationSummary: string;
+  animationDuration: number;
+  animationRemaining: number;
+  initialDamageApplied?: boolean;
 }
 
 export interface EventLogEntry {
@@ -44,5 +78,6 @@ export interface EventLogEntry {
   eventId: string;
   title: string;
   severity: EventSeverity;
+  choiceTitle?: string;
   outcomeSummary: string;
 }

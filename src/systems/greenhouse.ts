@@ -1,5 +1,5 @@
 import { CROP_MAP } from '../data/crops';
-import { MAX_DAILY_HOURS, TOTAL_DAY_HOURS } from '../data/mission';
+import { computeWorkClockMetrics, TOTAL_DAY_HOURS } from '../data/mission';
 import { BuildingId, BuildingState } from '../types/building';
 import { PlantedCrop } from '../types/game';
 import { ResourceAmounts } from '../types/resource';
@@ -12,10 +12,24 @@ export function canPlantCrop(params: {
   currentCrop: PlantedCrop | null;
   resources: ResourceAmounts;
   hoursElapsed: number;
+  inShelter?: boolean;
+  preAppliedTimeHours?: number;
 }): { ok: boolean; reason?: string } {
-  const { cropId, greenhouse, currentCrop, resources, hoursElapsed } = params;
+  const {
+    cropId,
+    greenhouse,
+    currentCrop,
+    resources,
+    hoursElapsed,
+    inShelter = false,
+    preAppliedTimeHours = 0,
+  } = params;
   const def = CROP_MAP[cropId];
   if (!def) return { ok: false, reason: 'Unknown crop' };
+
+  if (inShelter) {
+    return { ok: false, reason: 'Crew is sheltering inside Radiation Storm Shelter' };
+  }
 
   if (greenhouse.status === 'inactive') {
     return { ok: false, reason: 'Restore the Greenhouse before planting' };
@@ -25,7 +39,7 @@ export function canPlantCrop(params: {
     return { ok: false, reason: 'A crop is already growing in the Greenhouse' };
   }
 
-  if (hoursElapsed + 1 > TOTAL_DAY_HOURS) {
+  if (hoursElapsed + Math.max(0, 1 - preAppliedTimeHours) > TOTAL_DAY_HOURS) {
     return { ok: false, reason: 'Past 11:59 PM — End Day to sleep' };
   }
 
@@ -49,6 +63,7 @@ export function plantCropInGreenhouse(params: {
   day: number;
   resources: ResourceAmounts;
   hoursElapsed: number;
+  preAppliedTimeHours?: number;
 }): {
   crop: PlantedCrop;
   resources: ResourceAmounts;
@@ -56,9 +71,9 @@ export function plantCropInGreenhouse(params: {
   hoursRemaining: number;
   overtimeHours: number;
 } {
-  const { cropId, day, resources, hoursElapsed } = params;
+  const { cropId, day, resources, hoursElapsed, preAppliedTimeHours = 0 } = params;
   const def = CROP_MAP[cropId];
-  const nextHoursElapsed = Math.min(TOTAL_DAY_HOURS, hoursElapsed + 1);
+  const clock = computeWorkClockMetrics(hoursElapsed + Math.max(0, 1 - preAppliedTimeHours));
 
   return {
     crop: {
@@ -73,9 +88,7 @@ export function plantCropInGreenhouse(params: {
       water: def.seedWaterCost,
       energy: def.seedEnergyCost,
     }),
-    hoursElapsed: nextHoursElapsed,
-    hoursRemaining: Math.max(0, MAX_DAILY_HOURS - nextHoursElapsed),
-    overtimeHours: Math.max(0, nextHoursElapsed - MAX_DAILY_HOURS),
+    ...clock,
   };
 }
 
@@ -85,8 +98,16 @@ export function advanceCropGrowth(params: {
   hadEnoughWater: boolean;
   hadEnoughEnergy: boolean;
   eventPenalty?: number;
+  cropBoostDaysLeft?: number;
 }): { crop: PlantedCrop | null; growthDelta: number; justMatured: boolean } {
-  const { crop, buildings, hadEnoughWater, hadEnoughEnergy, eventPenalty = 0 } = params;
+  const {
+    crop,
+    buildings,
+    hadEnoughWater,
+    hadEnoughEnergy,
+    eventPenalty = 0,
+    cropBoostDaysLeft = 0,
+  } = params;
   if (!crop) return { crop: null, growthDelta: 0, justMatured: false };
   if (crop.isMature) return { crop, growthDelta: 0, justMatured: false };
 
@@ -103,7 +124,8 @@ export function advanceCropGrowth(params: {
   }
 
   const eff = getBuildingEffectiveness(greenhouse);
-  const rawGrowth = Math.max(0.3, eff - eventPenalty);
+  const boost = cropBoostDaysLeft > 0 ? 0.35 : 0;
+  const rawGrowth = Math.max(0.3, eff + boost - eventPenalty);
   const nextProgress = Math.min(
     crop.growthDaysRequired,
     Number((crop.growthProgress + rawGrowth).toFixed(2))
@@ -127,6 +149,8 @@ export function harvestMatureCrop(params: {
   resources: ResourceAmounts;
   capacities: ResourceAmounts;
   hoursElapsed: number;
+  inShelter?: boolean;
+  preAppliedTimeHours?: number;
 }): {
   crop: PlantedCrop | null;
   resources: ResourceAmounts;
@@ -135,14 +159,20 @@ export function harvestMatureCrop(params: {
   overtimeHours: number;
   harvestedAmount: number;
 } {
-  const { crop, resources, capacities, hoursElapsed } = params;
-  if (!crop || !crop.isMature || hoursElapsed + 1 > TOTAL_DAY_HOURS) {
+  const {
+    crop,
+    resources,
+    capacities,
+    hoursElapsed,
+    inShelter = false,
+    preAppliedTimeHours = 0,
+  } = params;
+  const remainingHour = Math.max(0, 1 - preAppliedTimeHours);
+  if (inShelter || !crop || !crop.isMature || hoursElapsed + remainingHour > TOTAL_DAY_HOURS) {
     return {
       crop,
       resources,
-      hoursElapsed,
-      hoursRemaining: Math.max(0, MAX_DAILY_HOURS - hoursElapsed),
-      overtimeHours: Math.max(0, hoursElapsed - MAX_DAILY_HOURS),
+      ...computeWorkClockMetrics(hoursElapsed),
       harvestedAmount: 0,
     };
   }
@@ -152,7 +182,6 @@ export function harvestMatureCrop(params: {
   const yieldAmount = Math.round(def.harvestFoodYield * healthFactor);
   const nextFood = Math.min(capacities.food, resources.food + yieldAmount);
   const actualAdded = nextFood - resources.food;
-  const nextHoursElapsed = Math.min(TOTAL_DAY_HOURS, hoursElapsed + 1);
 
   return {
     crop: null,
@@ -160,9 +189,7 @@ export function harvestMatureCrop(params: {
       ...resources,
       food: nextFood,
     },
-    hoursElapsed: nextHoursElapsed,
-    hoursRemaining: Math.max(0, MAX_DAILY_HOURS - nextHoursElapsed),
-    overtimeHours: Math.max(0, nextHoursElapsed - MAX_DAILY_HOURS),
+    ...computeWorkClockMetrics(hoursElapsed + remainingHour),
     harvestedAmount: actualAdded,
   };
 }

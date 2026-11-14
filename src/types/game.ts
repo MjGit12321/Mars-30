@@ -85,6 +85,14 @@ export interface SustainabilityAssessment {
   keyDecisions: string[];
 }
 
+export type GilEmotion =
+  | 'happy'
+  | 'excited'
+  | 'surprised'
+  | 'worried'
+  | 'concerned'
+  | 'relieved';
+
 export interface GilMessage {
   id: string;
   speaker: 'GIL';
@@ -92,6 +100,56 @@ export interface GilMessage {
   body: string;
   scienceTip?: string;
   urgency: 'info' | 'warning' | 'alert';
+  emotion: GilEmotion;
+}
+
+export interface MissionModifiers {
+  solarOutputBonusPct: number;
+  stormDamageFactor: number;
+  extraDustNextStorm: number;
+  cropBoostDaysLeft: number;
+  lastDecisionNote: {
+    id: string;
+    headline: string;
+    outcome: string;
+    futureWarning: string;
+    urgency: 'info' | 'warning' | 'alert';
+  } | null;
+  decisionHistory: Array<{
+    day: number;
+    eventId: string;
+    choiceId: string;
+    choiceTitle: string;
+    summary: string;
+  }>;
+}
+
+export interface TerrainScar {
+  id: string;
+  kind: 'solar_scorch' | 'sep_crater' | 'dust_drift' | 'quake_fissure';
+  x: number;
+  y: number;
+  size: number;
+  eventId: string;
+  day: number;
+}
+
+export type SleepPhase = 'idle' | 'returning' | 'sleeping';
+
+export interface PendingCrewAction {
+  id: string;
+  kind: 'task' | 'plant' | 'harvest';
+  buildingId: BuildingId;
+  taskId?: string;
+  cropId?: string;
+  taskKind: 'restore' | 'repair' | 'clean' | 'plant' | 'harvest';
+  assignedCrew: 'NAS' | 'EVA' | 'KAI' | 'MIA';
+  label: string;
+  phase: 'walking' | 'working';
+  workDurationSec: number;
+  workRemainingSec: number;
+  timeHoursTotal: number;
+  timeHoursApplied: number;
 }
 
 export interface GameState {
@@ -102,7 +160,10 @@ export interface GameState {
   maxDailyHours: number;
   hoursElapsed: number;
   overtimeHours: number;
+  sleepPhase: SleepPhase;
+  sleepingRemaining: number;
   ongoingTask: { taskId: string; buildingId: BuildingId } | null;
+  pendingAction: PendingCrewAction | null;
   phase: MissionPhaseNumber;
   resources: ResourceAmounts;
   capacities: ResourceAmounts;
@@ -114,7 +175,10 @@ export interface GameState {
   activeEvent: ActiveEvent | null;
   scheduledEventDays: Record<number, string>;
   eventHistory: EventLogEntry[];
+  environmentalScars: TerrainScar[];
+  modifiers: MissionModifiers;
   lastDaySummary: DaySummary | null;
+  gilDayHint: GilMessage | null;
   failureReason: string | null;
   assessment: SustainabilityAssessment | null;
   totalTasksCompleted: number;

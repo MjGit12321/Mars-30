@@ -40,7 +40,11 @@ export function GILPanel({ state }: GILPanelProps) {
           title="Tap GIL for a tip!"
           className="mars-btn w-14 h-14 rounded-2xl bg-[#FAF0DC] hover:bg-[#FFF8EB] flex items-center justify-center cursor-pointer"
         >
-          <GilAvatarIcon className="w-10 h-10" mood={message.urgency} />
+          <GilAvatarIcon
+            className="w-10 h-10"
+            mood={message.urgency}
+            emotion={message.emotion}
+          />
         </button>
       </div>
     );
@@ -62,7 +66,12 @@ export function GILPanel({ state }: GILPanelProps) {
         aria-label="Hide GIL tip"
         className="shrink-0 w-20 h-20 rounded-2xl bg-[#FAF0DC] border-2 border-[#292C2B] shadow-[0_4px_0_#292C2B] flex items-center justify-center cursor-pointer hover:bg-[#FFF8EB] transition-transform hover:scale-105"
       >
-        <GilAvatarIcon className="w-16 h-16" mood={message.urgency} isSpeaking={true} />
+        <GilAvatarIcon
+          className="w-16 h-16"
+          mood={message.urgency}
+          emotion={message.emotion}
+          isSpeaking={true}
+        />
       </button>
 
       {/* Short Clash of Clans-style Speech Bubble */}

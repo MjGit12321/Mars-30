@@ -9,7 +9,7 @@ export const RESOURCE_CONFIGS: Record<ResourceType, ResourceConfig> = {
     baseCapacity: 100,
     dailyCrewConsumption: 10,
     criticalThreshold: 25,
-    description: 'Essential breathable air produced by the Oxygen Generator.',
+    description: 'Essential breathable air produced by the Oxygen Generation System.',
   },
   water: {
     id: 'water',
